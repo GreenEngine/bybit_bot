@@ -1,7 +1,10 @@
 
 import requests
 from PIL import Image
-
+import sys
+import logging
+from watchdog.observers import Observer
+from watchdog.events import LoggingEventHandler
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext , Application,ContextTypes
 import sqlite3
@@ -173,7 +176,10 @@ async def start_timer(update: Update, context: CallbackContext):
        await  context.bot.send_message(chat_id=update.effective_chat.id, text='Извините, задача отправки уведомлений уже запущена.')
        return
     # Запустите задачу отправки уведомлений
-    job = context.job_queue.run_repeating(callback=send_notification,interval=poll_interval, chat_id =update.message.chat_id )
+    if context.job_queue:
+     job = context.job_queue.run_repeating(callback=send_notification,interval=poll_interval, chat_id =update.message.chat_id )
+    else :
+        print('fail initalize')
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Задача отправки уведомл')
 
@@ -219,4 +225,18 @@ def main() -> None:
     print('start')
 
 if __name__ == '__main__':
-    main()
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+    path = sys.argv[1] if len(sys.argv) > 1 else '.'
+    event_handler = LoggingEventHandler()
+    observer = Observer()
+    observer.schedule(event_handler, path, recursive=True)
+    observer.start()
+    try:
+        while observer.is_alive():
+            main()
+            observer.join(1)
+    finally:
+        observer.stop()
+        observer.join()
