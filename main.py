@@ -11,8 +11,7 @@ import sqlite3
 TOKEN = '5981663024:AAEfhFKqbHEA_JU_XasnS4cA4JGKYBQpY_4'
 # Установите URL-адрес API Bybit
 BASE_URL = 'https://api.bybit.com'
-#bybit api key - 0po7hx9wvnoZsK8cGa
-#secret key - iN1hxxD0oefDo1sVk2XBik7wIRZj68IzcqgD
+
 # Создайте экземпляр класса Updater и передайте ему токен бота
 global notification_type
 notification_type = 'change'
