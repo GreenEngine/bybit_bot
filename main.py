@@ -10,7 +10,7 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext , Application,ContextTypes
 import sqlite3
 # Установите токен бота, полученный от BotFather
-TOKEN = '5981663024:AAHr571JOwY3_K7Xvt0WoU9Pf--weXpa83g'
+TOKEN = '5981663024:AAEfhFKqbHEA_JU_XasnS4cA4JGKYBQpY_4'
 # Установите URL-адрес API Bybit
 BASE_URL = 'https://api.bybit.com'
 #bybit api key - 0po7hx9wvnoZsK8cGa

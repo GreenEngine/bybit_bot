@@ -24,6 +24,3 @@ def prices():
         results.append(result)
     print(results)
     return results
-def chosen_cur(currencys):
-    currencys
-    return
