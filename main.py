@@ -3,13 +3,14 @@ import requests
 from PIL import Image
 import sys
 import logging
+import commands
 from watchdog.observers import Observer
 from watchdog.events import LoggingEventHandler
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext , Application,ContextTypes
 import sqlite3
 # Установите токен бота, полученный от BotFather
-TOKEN = '5028082776:AAGRWWC7LmLNg0HsHGkSDhLsiCPMPhdDu9U'
+TOKEN = '5981663024:AAHr571JOwY3_K7Xvt0WoU9Pf--weXpa83g'
 # Установите URL-адрес API Bybit
 BASE_URL = 'https://api.bybit.com'
 #bybit api key - 0po7hx9wvnoZsK8cGa
@@ -47,7 +48,8 @@ async def help(update: Update, context: CallbackContext) -> None:
     +"\n/currency - Изменить выбранную валюту"
     +"\n/price - Получить текущий курс выбранной валюты"
     +"\n/interval - Изменить интервал опроса курса валюты"
-    +"\n/notification - Изменить тип уведомлений"
+    +"\n/notification_type - Изменить тип уведомлений"
+    +"\n/notification_amount - Изменить сумму изменения курса уведомлений"
     +"\n/start_timer - Запустить таймер уведомлений"
     +"\n/stop_timer - Остановить таймер уведомлений")
 
@@ -74,13 +76,15 @@ async def get_price(update: Update, context: CallbackContext) -> None:
     # Создайте URL-адрес для запроса курса выбранной валюты
     url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
     # Отправьте GET-запрос на URL-адрес
+    pr = commands.prices()
+    message = f'\n{pr[0]}\n{pr[1]}\n{pr[2]}\n{pr[3]}\n'
     response = requests.get(url)
     # Извлеките цену выбранной валюты из ответа
     price = response.json()['result'][0]['last_price']
     global last_price
     last_price = price
     # Отправьте цену выбранной валюты в чат
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Текущий курс {selected_currency}: {price}')
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=f'\n Bybit: {selected_currency}: {price}  {message}')
 
 # Создайте обработчик команды /interval
 async def set_interval(update: Update, context: CallbackContext) -> None:
@@ -154,15 +158,13 @@ async def send_notification(context ) :
     # Вычислите изменение цены выбранной валюты с момента последнего запроса
     price_change = float(price) - float(last_price)
     # Вычислите процент изменения цены выбранной валюты с момента последнего запроса
-    percentage_change = (float(price) - float(last_price)) / float(last_price) * 100
+
     # Проверьте, что тип уведомлений выбран корректно и отправьте уведомление
-    if  notification_type == 'change' and abs(price_change) > notification_amount:
+    if notification_type == 'change' and abs(price_change) > notification_amount:
        last_price = price
-       await context.bot.send_message(chat_id=chat, text=f'Цена {selected_currency} изменилась на {price_change}. \n Текущая цена:{price}')
-    elif notification_type == 'percentage' and abs(percentage_change) > notification_amount:
-       await context.bot.send_message(chat_id=chat, text=f'Цена {selected_currency} изменилась на {percentage_change}%.')
-    elif notification_type == 'amount' and abs(price_change) > notification_amount:
-       await  context.bot.send_message(chat_id=chat, text=f'Цена {selected_currency} изменилась на {price_change}.')
+       await context.bot.send_message(chat_id=chat, text=f' {selected_currency}.:{price}$ \n :{price_change}$')
+
+
     # Обновите последнюю цену выбранной валюты
 
 async def start_timer(update: Update, context: CallbackContext):
