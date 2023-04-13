@@ -1,12 +1,11 @@
 
 import requests
-from PIL import Image
-import logging
+
 import commands
 
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext , Application,ContextTypes
-import sqlite3
+
 # Установите токен бота, полученный от BotFather
 TOKEN = '5981663024:AAEfhFKqbHEA_JU_XasnS4cA4JGKYBQpY_4'
 # Установите URL-адрес API Bybit
