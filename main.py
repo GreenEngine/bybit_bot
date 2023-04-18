@@ -1,13 +1,10 @@
-
 import requests
-
 import commands
-
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext , Application,ContextTypes
 
 # Установите токен бота, полученный от BotFather
-TOKEN = '5981663024:AAEfhFKqbHEA_JU_XasnS4cA4JGKYBQpY_4'
+TOKEN = '5929509670:AAGuAY7Zo9V6q8SuBQI8CL_dWnZM--8AdmI'
 # Установите URL-адрес API Bybit
 BASE_URL = 'https://api.bybit.com'
 
@@ -69,6 +66,7 @@ async def set_currency(update: Update, context: CallbackContext) -> None:
 
 # Создайте обработчик команды /price
 async def get_price(update: Update, context: CallbackContext) -> None:
+
     # Создайте URL-адрес для запроса курса выбранной валюты
     url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
     # Отправьте GET-запрос на URL-адрес
@@ -80,7 +78,7 @@ async def get_price(update: Update, context: CallbackContext) -> None:
     global last_price
     last_price = price
     # Отправьте цену выбранной валюты в чат
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=f'\n Bybit: {selected_currency}: {price}  {message}')
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=f'\n Bybit: {selected_currency}: {price}{message}')
 
 # Создайте обработчик команды /interval
 async def set_interval(update: Update, context: CallbackContext) -> None:
@@ -175,8 +173,8 @@ async def start_timer(update: Update, context: CallbackContext):
        return
     # Запустите задачу отправки уведомлений
     if context.job_queue:
-     job = context.job_queue.run_repeating(callback=send_notification,interval=poll_interval, chat_id =update.message.chat_id )
-    else :
+       job = context.job_queue.run_repeating(callback=send_notification,interval=poll_interval, chat_id =update.message.chat_id )
+    else:
         print('fail initalize')
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Задача отправки уведомл')
