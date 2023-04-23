@@ -1,13 +1,15 @@
+import PIL.Image
 import requests
 import commands
-from telegram import Update
+from telegram import Update,InputMediaPhoto
 from telegram.ext import Updater, CommandHandler, CallbackContext , Application,ContextTypes
-
+import io
 # Установите токен бота, полученный от BotFather
-TOKEN = '5929509670:AAGuAY7Zo9V6q8SuBQI8CL_dWnZM--8AdmI'
+TOKEN = '5929509670:AAGNgWIygznKC1_wcTQgCevn64CwfB3HKPA'
 # Установите URL-адрес API Bybit
 BASE_URL = 'https://api.bybit.com'
-
+global kit_scaner_on
+kit_scaner_on = ('_',)
 # Создайте экземпляр класса Updater и передайте ему токен бота
 global notification_type
 notification_type = 'change'
@@ -28,6 +30,58 @@ async def start(update: Update, context: CallbackContext) -> None:
     'Добро пожаловать! Это бот для получения курса валюты с Bybit. Введите /help для получения списка команд.')
 
 ##`sjevM3xG9qgFE6b
+async def send_notification(context):
+    global last_price
+    global notification_amount
+    global chat
+    print('Send Notification')
+
+    # Создайте URL-адрес для запроса курса выбранной валюты
+    url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
+    # Отправьте GET-запрос на URL-адрес
+    response = requests.get(url)
+    # Извлеките цену выбранной валюты из ответа
+    price = response.json()['result'][0]['last_price']
+    print(f'{price}')
+    # Вычислите изменение цены выбранной валюты с момента последнего запроса
+    price_change = float(price) - float(last_price)
+    # Вычислите процент изменения цены выбранной валюты с момента последнего запроса
+
+    # Проверьте, что тип уведомлений выбран корректно и отправьте уведомление
+    if notification_type == 'change' and abs(price_change) > notification_amount:
+       last_price = price
+       await context.bot.send_message(chat_id=chat, text=f' {selected_currency}.:{price}$ \n :{price_change}$')
+
+async def check_kit(context) :
+       if commands.kit_check() is not None:
+           data = commands.kit_check()
+           await context.bot.send_message(chat_id=context, text=f'Проплыл кит:{data}$')
+
+async def kit_attention(update: Update, context: CallbackContext) -> None:
+    global kit_scaner_on
+    global job
+    global poll_interval
+    chat_id = update.effective_user.id
+    if job is not None:
+        index = kit_scaner_on.index(chat_id)
+        await update.message.reply_text('Функция оповещения о крупных транзакциях  выключена')
+    if context.job_queue:
+       job = context.job_queue.run_repeating(callback=check_kit,interval=5, chat_id =update.message.chat_id )
+    else:
+        print('fail initalize')
+    if chat_id in kit_scaner_on:
+        kit_scaner_on.index = kit_scaner_on.index[:index] + kit_scaner_on.index[index + 1:]
+
+    else:
+        kit_scaner_on += kit_scaner_on + (chat_id,)
+        await update.message.reply_text('Функция оповещения о крупных транзакциях  включена')
+
+
+    chat = update.message.chat_id
+    # Проверьте, что задача отправки уведомлений еще не запущена
+
+    # Запустите задачу отправки уведомлений
+
 
 
 # Создайте обработчик команды /help
@@ -44,7 +98,9 @@ async def help(update: Update, context: CallbackContext) -> None:
     +"\n/notification_type - Изменить тип уведомлений"
     +"\n/notification_amount - Изменить сумму изменения курса уведомлений"
     +"\n/start_timer - Запустить таймер уведомлений"
-    +"\n/stop_timer - Остановить таймер уведомлений")
+    +"\n/stop_timer - Остановить таймер уведомлений"
+    +"\n/kit_attention - включить оповещение о китах")
+
 
 
     await update.message.reply_text(help_text)
@@ -66,7 +122,6 @@ async def set_currency(update: Update, context: CallbackContext) -> None:
 
 # Создайте обработчик команды /price
 async def get_price(update: Update, context: CallbackContext) -> None:
-
     # Создайте URL-адрес для запроса курса выбранной валюты
     url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
     # Отправьте GET-запрос на URL-адрес
@@ -77,9 +132,13 @@ async def get_price(update: Update, context: CallbackContext) -> None:
     price = response.json()['result'][0]['last_price']
     global last_price
     last_price = price
-    # Отправьте цену выбранной валюты в чат
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=f'\n Bybit: {selected_currency}: {price}{message}')
-
+    await commands.get_book_btc()
+    photo = PIL.Image.open('screenshot.png')
+    with io.BytesIO() as output:
+        photo.save(output, format='PNG')
+        image_data = output.getvalue()
+    await context.bot.send_message(chat_id=update.effective_chat.id,text=f'\n Bybit: {selected_currency}: {price}{message}')
+    await context.bot.sendPhoto(chat_id = update.effective_chat.id , photo=image_data)
 # Создайте обработчик команды /interval
 async def set_interval(update: Update, context: CallbackContext) -> None:
     global poll_interval
@@ -184,31 +243,24 @@ def main() -> None:
     print('one')
     # Создайте объект Updater и передайте ему токен бота
     application = Application.builder().token(TOKEN).build()
-
-    # Получите объект Dispatcher из объекта Updater
-
-
     # Добавьте обработчик команды /start
     application.add_handler(CommandHandler('start', start))
-
     # Добавьте обработчик команды /help
     application.add_handler(CommandHandler('help', help))
     application.add_handler(CommandHandler('currency', set_currency))
-
     # Добавьте обработчик команды /price
     application.add_handler(CommandHandler('price', get_price))
-
     # Добавьте обработчик команды /interval
     application.add_handler(CommandHandler    ('interval', set_interval))
-
     # Добавьте обработчик команды /notification_type
     application.add_handler(CommandHandler('notification_type', set_notification_type))
-
     # Добавьте обработчик команды /notification_amount
     application.add_handler(CommandHandler('notification_amount', set_notification_amount))
-
     # Добавьте обработчик команды /start_timer
     application.add_handler(CommandHandler('start_timer', start_timer))
+    application.add_handler(CommandHandler('kit_attention', kit_attention))
+
+
 
     # Добавьте обработчик команды /stop_timer
     application.add_handler(CommandHandler('stop_timer', stop_timer))
@@ -218,7 +270,7 @@ def main() -> None:
 
     # Войдите в цикл получения обновлений
 
-    print('start')
 
 if __name__ == '__main__':
     main()
+
