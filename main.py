@@ -7,7 +7,7 @@ import io
 import base
 CURRENCY, INTERVAL, NOTIFICATION_TYPE, NOTIFICATION_AMOUNT,START = range(5)
 # Установите токен бота, полученный от BotFather
-TOKEN = '5929509670:AAGNgWIygznKC1_wcTQgCevn64CwfB3HKPA'
+TOKEN = '5028082776:AAGRWWC7LmLNg0HsHGkSDhLsiCPMPhdDu9U'
 # необходимо добавить функцию отслеживания кита
 '''
 
