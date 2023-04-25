@@ -1,9 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
+import base
 import time
 import re
 kiturl = "https://www.blockchain.com/explorer/mempool/btc"
-kit = 1
 kits = []
 global last_trans
 last_trans = ('1','1','1','1')
@@ -40,9 +40,6 @@ async def get_book_btc():
         cropped_screenshot.save('screenshot.png')
         screenshot.close()
         cropped_screenshot.close()
-
-
-
 def prices():
     results = []
     for exchange, url in exchanges.items():
@@ -60,8 +57,10 @@ def prices():
     print(results)
     return results
 
-def kit_check():
-    print("kit")
+def kit_check(chat):
+    #print("kit")
+    kit = base.get_user_setting(chat,'kit_amount')
+
     global last_trans
     # Отправляем запрос на получение HTML-кода страницы
     response = requests.get(kiturl)
@@ -88,7 +87,7 @@ def kit_check():
         hash = elements[0]
         hash = hash[0:10]
         trans = (hash,timed,btc_amount,usd_amount)
-        if float(btc_amount) >= kit:
+        if float(btc_amount) >= float(kit[0]):
          if trans[0] != last_trans[0]:
            last_trans = trans
            if trans in kits:
