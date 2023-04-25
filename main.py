@@ -10,7 +10,7 @@ CURRENCY, INTERVAL, NOTIFICATION_TYPE, NOTIFICATION_AMOUNT,START = range(5)
 TOKEN = '5929509670:AAGNgWIygznKC1_wcTQgCevn64CwfB3HKPA'
 # необходимо добавить функцию отслеживания кита
 '''
-добавить инлайны
+
 добавить английский язык
 добавить шифрованиебазы
 Необходмы настройки оповещений 
@@ -25,19 +25,51 @@ BASE_URL = 'https://api.bybit.com'
 global kit_scaner_on
 kit_scaner_on = ('_',)
 # Создайте экземпляр класса Updater и передайте ему токен бота
-global notification_type
-notification_type = 'change'
-global notification_amount
-notification_amount = 100
-global poll_interval
-poll_interval = 10
 global last_price
+last_price = 0
+
 # Создайте глобальные переменные для выбранной валюты, интервала опроса, типа уведомлений и задачи отправки уведомлений
 selected_currency = 'BTC'
 job = None
-
+job_timer = None
 base.check_table_users()
 # Создайте обработчик команды /start
+async def send_notification(context) :
+    #print('Send Notification')
+    global last_price
+    chat = job_timer.chat_id
+    #print(chat)
+    notification_type = base.get_user_setting(chat,'Notification_type')
+    notification_type = notification_type [0]
+    #print(notification_type)
+    notification_amount = base.get_user_setting(chat,'Notification_amount')
+    notification_amount =notification_amount[0]
+    #print(notification_amount)
+    selected_currency = base.get_user_setting(chat,'Currency')
+    selected_currency = selected_currency[0]
+   # print(selected_currency)
+    # Создайте URL-адрес для запроса курса выбранной валюты
+    url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
+    # Отправьте GET-запрос на URL-адрес
+    response = requests.get(url)
+    # Извлеките цену выбранной валюты из ответа
+    price = response.json()['result'][0]['last_price']
+    #print(f'{price}')
+    # Вычислите изменение цены выбранной валюты с момента последнего запроса
+    price_change = float(price) - float(last_price)
+    # Вычислите процент изменения цены выбранной валюты с момента последнего запроса
+    #print(f'price change:{price_change}')
+    #await context.bot.send_message(chat_id=chat, text=f'$')
+    if last_price == 0:
+       last_price = price
+    # Проверьте, что тип уведомлений выбран корректно и отправьте уведомление
+    if notification_type == 'change' :
+     if abs(float(price_change)) > float(notification_amount):
+       print('mess')
+       last_price = price
+       await context.bot.send_message(chat_id=chat, text=f' {selected_currency}.:{price}$')
+
+
 async def start(update: Update, context: CallbackContext) -> None:
     if  base.check_user(update.effective_user.id) == False:
         base.set_user_settings(user_id=update.effective_chat.id, apikey='0', kit = '1'
@@ -63,12 +95,31 @@ async def on_button(update: Update, context: CallbackContext):
     data = query.data
     chat = update.effective_chat.id
     print(data)
+    global job
+    global job_timer
     if data == 'currency':
         base.set_user_settings(user_id=chat, state='CURRENCY')
         await query.message.reply_text('Введите валюту:')
 
     elif data == 'price':
-        await get_price()
+        # Создайте URL-адрес для запроса курса выбранной валюты
+        url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
+        # Отправьте GET-запрос на URL-адрес
+        pr = commands.prices()
+        message = f'\n{pr[0]}\n{pr[1]}\n{pr[2]}\n{pr[3]}\n'
+        response = requests.get(url)
+        # Извлеките цену выбранной валюты из ответа
+        price = response.json()['result'][0]['last_price']
+        global last_price
+        last_price = price
+        await commands.get_book_btc()
+        photo = PIL.Image.open('screenshot.png')
+        with io.BytesIO() as output:
+            photo.save(output, format='PNG')
+            image_data = output.getvalue()
+        await context.bot.send_message(chat_id=update.effective_chat.id,
+                                       text=f'\n Bybit: {selected_currency}: {price}{message}')
+        await context.bot.sendPhoto(chat_id=update.effective_chat.id, photo=image_data)
 
     elif data == 'interval':
         base.set_user_settings(user_id=chat,state='INTERVAL')
@@ -90,7 +141,7 @@ async def on_button(update: Update, context: CallbackContext):
     elif data == 'kit_attention':
 
         kit_scaner_on = base.get_user_setting(chat, 'kit')
-        global job
+
         print('ll')
 
         if job is not None:
@@ -107,12 +158,43 @@ async def on_button(update: Update, context: CallbackContext):
         else:
             base.set_user_settings(user_id=chat, kit='1')
             await query.message.reply_text('Функция оповещения о крупных транзакциях  включена')
+    elif data == 'start_timer':
 
+            interval = base.get_user_setting(chat, 'interval')
+            interval = int(interval[0])
+            #print(interval)
+        # Проверьте, что задача отправки уведомлений еще не запущена
+            if job_timer is not None:
+             await  context.bot.send_message(chat_id=chat, text='Извините, задача отправки уведомлений уже запущена.')
+             return
+        # Запустите задачу отправки уведомлений
+            if context.job_queue:
+             print('TImer_job')
+             job_timer = context.job_queue.run_repeating(callback=send_notification, interval=interval, chat_id=chat)
 
-async def error_handler(update: Update, context: CallbackContext):
-    #data = update.effective_message.text
-    #print(data)
-    await update.message.reply_text(text='Произошла ошибка. Пожалуйста, попробуйте еще раз позже.')
+            else:
+             print('fail initalize')
+
+            await context.bot.send_message(chat_id=chat, text=f'Задача отправки уведомлeний активирована')
+    elif data == 'stop_timer':
+        # Проверьте, что задача отправки уведомлений запущена
+        if job_timer is None:
+            await context.bot.send_message(chat_id=chat,
+                                           text='Извините, задача отправки уведомлений еще не запущена.')
+            return
+        # Остановите задачу отправки уведомлений
+        job_timer.schedule_removal()
+        job_timer = None
+
+        await context.bot.send_message(chat_id=chat,
+                                       text='Задача отправки уведомлений остановлена.')
+    elif data =='kit_amount':
+        base.set_user_settings(user_id=chat, state='KIT_AMOUNT')
+        await query.message.reply_text('Введите обьем кита в BTC')
+
+async def error_handler(update: Update, context: CallbackContext) -> None:
+    if update is not None:
+        await update.message.reply_text(text='Произошла ошибка. Пожалуйста, попробуйте еще раз позже.')
 
 async def on_input(update: Update, context: CallbackContext):
     chat = update.effective_chat.id
@@ -130,44 +212,30 @@ async def on_input(update: Update, context: CallbackContext):
         base.set_user_settings(user_id=chat, state='START')
         await update.message.reply_text(f'Интервал установлен на :{text} секунд')
     elif data =='NOTIFICATION_TYPE':
-        base.set_user_settings(user_id=chat, Notification_type=text)
+        query = update.callback_query
+        data = query.data
+        print(data)
+        base.set_user_settings(user_id=chat, Notification_type=data)
         base.set_user_settings(user_id=chat, state='START')
-        # Здесь записываем базу тип уведомлений
+        await  update.message.reply_text(f'Установлен тип оповещений: {data}')
+
         pass
     elif data =='NOTIFICATION_AMOUNT':
         try:
+            print(f'Razmer{text}')
             base.set_user_settings(user_id=chat, Notification_amount=text)
             base.set_user_settings(user_id=chat, state='START')
             #Записываем в базу
-            await  update.message.reply_text('Установлено пороговое значение: {}'.format(notification_amount))
+            await  update.message.reply_text(f'Установлено пороговое значение: {text}')
         except ValueError:
 
             await update.message.reply_text('Ошибка! Введите корректное число.')
-
-
+    elif data == 'KIT_AMOUNT':
+        base.set_user_settings(user_id=chat,state='START')
+        base.set_user_settings(user_id=chat, kit_amount=text)
+        await update.message.reply_text(f'Вы выбрали обьем :{text}BTC')
 
 ##`sjevM3xG9qgFE6b
-async def send_notification(context):
-    global last_price
-    chat= context.message.chat_id
-    notification_amount = base.get_user_setting(chat,'notification_amount')
-    print('Send Notification')
-    selected_currency = base.get_user_setting(chat,'Currency')
-    # Создайте URL-адрес для запроса курса выбранной валюты
-    url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
-    # Отправьте GET-запрос на URL-адрес
-    response = requests.get(url)
-    # Извлеките цену выбранной валюты из ответа
-    price = response.json()['result'][0]['last_price']
-    print(f'{price}')
-    # Вычислите изменение цены выбранной валюты с момента последнего запроса
-    price_change = float(price) - float(last_price)
-    # Вычислите процент изменения цены выбранной валюты с момента последнего запроса
-    notification_type = base.get_user_setting(chat,'notification_type')
-    # Проверьте, что тип уведомлений выбран корректно и отправьте уведомление
-    if notification_type == 'change' and abs(price_change) > notification_amount:
-       last_price = price
-       await context.bot.send_message(chat_id=chat, text=f' {selected_currency}.:{price}$ \n :{price_change}$')
 
 async def check_kit(context) :
        chat_id = job.chat_id
@@ -235,24 +303,7 @@ async def set_currency(update: Update, context: CallbackContext) -> None:
     await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Выбрана валюта: {selected_currency}')
 
 # Создайте обработчик команды /price
-async def get_price(update: Update, context: CallbackContext) -> None:
-    # Создайте URL-адрес для запроса курса выбранной валюты
-    url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
-    # Отправьте GET-запрос на URL-адрес
-    pr = commands.prices()
-    message = f'\n{pr[0]}\n{pr[1]}\n{pr[2]}\n{pr[3]}\n'
-    response = requests.get(url)
-    # Извлеките цену выбранной валюты из ответа
-    price = response.json()['result'][0]['last_price']
-    global last_price
-    last_price = price
-    await commands.get_book_btc()
-    photo = PIL.Image.open('screenshot.png')
-    with io.BytesIO() as output:
-        photo.save(output, format='PNG')
-        image_data = output.getvalue()
-    await context.bot.send_message(chat_id=update.effective_chat.id,text=f'\n Bybit: {selected_currency}: {price}{message}')
-    await context.bot.sendPhoto(chat_id = update.effective_chat.id , photo=image_data)
+
 # Создайте обработчик команды /interval
 async def set_interval(update: Update, context: CallbackContext) -> None:
     # Извлеките интервал опроа из аргумента команды
@@ -278,19 +329,6 @@ async def set_notification_type(update: Update, context: CallbackContext) -> Non
     base.set_user_settings(user_id=update.effective_chat.id, Notification_type=notification)
     await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Выбран тип уведомлений: {notification}')
 
-# Создайте обработчик команды /start_timer
-# Создайте обработчик команды /stop_timer
-async def stop_timer(update: Update, context: CallbackContext) -> None:
-    global job
-    # Проверьте, что задача отправки уведомлений запущена
-    if job is None:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Извините, задача отправки уведомлений еще не запущена.')
-        return
-    # Остановите задачу отправки уведомлений
-    job.schedule_removal()
-    job = None
-
-    await context.bot.send_message(chat_id=update.effective_chat.id, text='Задача отправки уведомлений остановлена.')
 
 # Создайте функцию для отправки уведомлений
 async def set_notification_amount(update, context):
@@ -307,49 +345,12 @@ async def set_notification_amount(update, context):
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
-async def send_notification(context ) :
-    global last_price
-    chat = context.message.chat_id
-    notification_amount = base.get_user_setting(chat,'notification_amount')
-    print('Send Notification')
-    selected_currency = base.get_user_setting(chat,'Currency')
-    # Создайте URL-адрес для запроса курса выбранной валюты
-    url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
-    # Отправьте GET-запрос на URL-адрес
-    response = requests.get(url)
-    # Извлеките цену выбранной валюты из ответа
-    price = response.json()['result'][0]['last_price']
-    print(f'{price}')
-    # Вычислите изменение цены выбранной валюты с момента последнего запроса
-    price_change = float(price) - float(last_price)
-    # Вычислите процент изменения цены выбранной валюты с момента последнего запроса
-
-    # Проверьте, что тип уведомлений выбран корректно и отправьте уведомление
-    if notification_type == 'change' and abs(price_change) > notification_amount:
-       last_price = price
-       await context.bot.send_message(chat_id=chat, text=f' {selected_currency}.:{price}$ \n :{price_change}$')
-
 
 
     # Обновите последнюю цену выбранной валюты
 
-async def start_timer(update: Update, context: CallbackContext):
-    global job
-    chat = update.message.chat_id
-    interval = base.get_user_setting(chat,'interval')
-    # Проверьте, что задача отправки уведомлений еще не запущена
-    if job is not None:
-       await  context.bot.send_message(chat_id=chat, text='Извините, задача отправки уведомлений уже запущена.')
-       return
-    # Запустите задачу отправки уведомлений
-    if context.job_queue:
-       job = context.job_queue.run_repeating(callback=send_notification,interval=interval, chat_id =chat )
-    else:
-        print('fail initalize')
 
-    await context.bot.send_message(chat_id=chat, text=f'Задача отправки уведомл')
-async def cancel():
-    pass
+
 # Создайте функцию для запуска бота
 def main() -> None:
     print('one')
@@ -377,9 +378,8 @@ def main() -> None:
 
     application.add_handler(CallbackQueryHandler(on_button))
     application.add_error_handler(error_handler)
-
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_input))
-
+    application.add_handler(CallbackQueryHandler(on_input))
 
     # Запустите бота
     application.run_polling()
