@@ -1,23 +1,36 @@
+import datetime
 import PIL.Image
 import requests
 import commands
 from telegram import Update,InputMediaPhoto,InlineKeyboardButton,InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext , Application,ContextTypes,ConversationHandler ,CallbackQueryHandler,MessageHandler,filters,JobQueue
+from telegram.ext import Updater, CommandHandler, CallbackContext , Application,ContextTypes,ConversationHandler ,CallbackQueryHandler,MessageHandler,filters,JobQueue,Job
 import io
 import base
+import subprocess
+admin = 1211273933
 CURRENCY, INTERVAL, NOTIFICATION_TYPE, NOTIFICATION_AMOUNT,START = range(5)
 # Установите токен бота, полученный от BotFather
-TOKEN = '5028082776:AAGRWWC7LmLNg0HsHGkSDhLsiCPMPhdDu9U'
-# необходимо добавить функцию отслеживания кита
+TOKEN = '5929509670:AAGNgWIygznKC1_wcTQgCevn64CwfB3HKPA'
+# необходимо добавить функцию перезапуска задач при перезагрузке бота и добвать автоперезапуск по аптайму
+#
 '''
+Алгоритм : 
+Ловим кита 
+ищем транзакцию в списке транзакций 
+определяем кошелек 
+Записываем в базу 
 
 добавить английский язык
 добавить шифрованиебазы
 Необходмы настройки оповещений 
 цены 
 площадки 
-ордера 
-график 
+"""
+если заходят примерно одиннаковые транзакции по 200 btc команды начали работу если это происходит в интервале 10 мин
+"""
+
+нужно чподставлять сюда chat id  и запускать задачи которые активированы
+context.job_queue.run_repeating(callback=send_notification, interval=interval, chat_id=chat)
 '''
 # Исправить оповещения
 # Установите URL-адрес API Bybit
@@ -32,8 +45,12 @@ last_price = 0
 selected_currency = 'BTC'
 job = None
 job_timer = None
+base.base_create()
 base.check_table_users()
 # Создайте обработчик команды /start
+
+
+
 async def send_notification(context) :
     #print('Send Notification')
     global last_price
@@ -103,6 +120,10 @@ async def on_button(update: Update, context: CallbackContext):
 
     elif data == 'price':
         # Создайте URL-адрес для запроса курса выбранной валюты
+        graph = commands.get_graph()
+        with io.BytesIO() as output:
+            graph.save(output, format='PNG')
+            graph_data = output.getvalue()
         url = f'{BASE_URL}/v2/public/tickers?symbol={selected_currency}USD'
         # Отправьте GET-запрос на URL-адрес
         pr = commands.prices()
@@ -114,12 +135,15 @@ async def on_button(update: Update, context: CallbackContext):
         last_price = price
         await commands.get_book_btc()
         photo = PIL.Image.open('screenshot.png')
+
         with io.BytesIO() as output:
             photo.save(output, format='PNG')
             image_data = output.getvalue()
         await context.bot.send_message(chat_id=update.effective_chat.id,
                                        text=f'\n Bybit: {selected_currency}: {price}{message}')
         await context.bot.sendPhoto(chat_id=update.effective_chat.id, photo=image_data)
+        await context.bot.sendPhoto(chat_id=update.effective_chat.id, photo=graph_data)
+
 
     elif data == 'interval':
         base.set_user_settings(user_id=chat,state='INTERVAL')
@@ -238,8 +262,9 @@ async def on_input(update: Update, context: CallbackContext):
 ##`sjevM3xG9qgFE6b
 
 async def check_kit(context) :
+       print('check_kit')
        chat_id = job.chat_id
-       #print(str(chat_id))
+
        data = commands.kit_check(chat_id)
        if data is not None:
            hash = data[0]
@@ -349,17 +374,43 @@ async def set_notification_amount(update, context):
 
     # Обновите последнюю цену выбранной валюты
 
+async def update_handler(update: Update, context: CallbackContext) -> None:
+    chat = update.effective_user.id
+    # Выполнить скрипт обновления
+    if chat == admin :
+       await subprocess.call(['bash', 'update_bot.sh'])
+    # Отправить сообщение о том, что обновление выполнено
+       await update.message.reply_text('Начинаем обновление')
+    else :
+        await update.message.reply_text('Только Админ может дать команду на обновление')
 
-
+async def load_jobs(context:Application):
+    print('перезапуск задач')
+    kit = base.get_users_kit()
+    job_queue = context.job_queue
+    autocurr = base.get_users_price_attention()
+    for k in kit :
+      await context.bot.send_message(chat_id=k[0] ,text='Бот был пепезагружен и ваши оповещения перезапущены')
+      job = Job(callback=check_kit, chat_id=k[0])
+      job_queue.run_repeating(job, interval=10, first=0, name = str(k[0]))
+      #print(k)
+    for a in autocurr:
+        job = Job(callback=send_notification, chat_id=a)
+        job_queue.run_repeating(job,interval=10 ,first=0,name = str(a[0]))
+    #print(job_queue.jobs())
+    #print('aeyrwbz')
 # Создайте функцию для запуска бота
 def main() -> None:
     print('one')
     # Создайте объект Updater и передайте ему токен бота
     application = Application.builder().token(TOKEN).build()
+    application.job_queue.run_once(callback=load_jobs,when=0)
+
     # Добавьте обработчик команды /start
     application.add_handler(CommandHandler('start', start))
     # Добавьте обработчик команды /help
     application.add_handler(CommandHandler('help', help))
+    application.add_handler(CommandHandler('update', update_handler))
    # application.add_handler(CommandHandler('currency', set_currency))
     # Добавьте обработчик команды /price
     #application.add_handler(CommandHandler('price', get_price))
@@ -382,6 +433,7 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(on_input))
 
     # Запустите бота
+
     application.run_polling()
 
     # Войдите в цикл получения обновлений

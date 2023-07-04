@@ -1,6 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
 import base
+import ccxt
+import pandas as pd
+import mplfinance as mpf
 import time
 import re
 kiturl = "https://www.blockchain.com/explorer/mempool/btc"
@@ -22,16 +25,17 @@ exchanges = {
 }
 
 async def click_icon(page):
-    icon_selector =  'svg[data-icon="close-circle"]'
+    icon_selector = 'svg[data-icon="close-circle"]'
     icon = page.locator(icon_selector)
     await icon.click()
+
 async def get_book_btc():
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page = await browser.new_page()
         await page.goto(url)
         await page.evaluate("window.scrollBy(0, 190)")
-        await click_icon(page)
+
         await asyncio.sleep(2)
         await page.screenshot(path="screenshot.png")
         await browser.close()
@@ -59,6 +63,8 @@ def prices():
 
 def kit_check(chat):
     #print("kit")
+    links = []
+
     kit = base.get_user_setting(chat,'kit_amount')
 
     global last_trans
@@ -70,6 +76,9 @@ def kit_check(chat):
 
     # Находим необходимые данные на странице
     data = soup.find("div", {"class": "sc-7b53084c-1 czXdjN"}).text
+    link = soup.find_all("a", href=lambda href: href and "explorer/transactions/btc" in href)
+    for l in link:
+     links.append(l["href"])#добавляем ссылки в список
     # Разделяем данные на отдельные строки, используя "Hash" в качестве разделителя
     transactions = data.split("Hash ")[1:]
 
@@ -85,7 +94,7 @@ def kit_check(chat):
         usd_amount = elements[-1]
         usd_amount = usd_amount[4:len(usd_amount)]
         hash = elements[0]
-        hash = hash[0:10]
+        hash = hash[0:9]
         trans = (hash,timed,btc_amount,usd_amount)
         if float(btc_amount) >= float(kit[0]):
          if trans[0] != last_trans[0]:
@@ -95,8 +104,23 @@ def kit_check(chat):
                break
            else:
             kits.append(trans)
-            print(trans)
+           # print(trans)
             print('kit_trnas')
+           # print(trans[0])
+            for l in links:
+               # print(l)
+                l = l[27:]
+                #print(l)
+                tr = trans[0]
+                tr1 = tr[0:4]
+                tr2 = tr[5:]
+                #print(tr1)
+                if l.startswith(tr1) and l.endswith(tr2):
+                    #print(trans)
+                    trans = trans +(l,)
+                    #print(trans)
+                    base.kit_save(trans)
+            #здесь нужно изскать этот хеш и  добавлять данные в базу
             return trans
             #тут же можно добавить клик в браузере для перехода в транзакцию и считывание кошелька
          else:
@@ -105,3 +129,20 @@ def kit_check(chat):
             print('kit_none')
             return None
          #print(f'{kits} \n')
+def get_graph():
+    exchange = ccxt.bybit()
+
+    # Получите данные графика для определенной криптовалютной пары и временного интервала
+    symbol = 'BTC/USDT'
+    timeframe = '30m'
+    limit = 50  # Максимальное количество свечей, которые можно запросить за один раз
+    ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+
+    # Преобразуйте данные в удобный формат для анализа, используя библиотеку Pandas
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+
+    # Отобразите свечной график с помощью библиотеки mplfinance
+    mpf.plot(df, type='candle', volume=True, style='charles', savefig='graph.png')
+    return Image.open('graph.png')

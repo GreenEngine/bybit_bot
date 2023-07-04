@@ -1,15 +1,22 @@
 import sqlite3
+import datetime
 conn = sqlite3.connect('bot.db')
 c = conn.cursor()
 baza = 'bot.db'
+
 def base_create():
  c.execute('''CREATE TABLE IF NOT EXISTS users
              (user_id INTEGER PRIMARY KEY, username TEXT, apikey TEXT, kit TEXT,kit_amount TEXT
              , Orderbook TEXT, Notification_type TEXT, Notification_amount TEXT
              , Notification_fixed TEXT, Currency TEXT,interval TEXT,state TEXT )''')
  conn.commit()
- conn.close()
 
+ c.execute('''CREATE TABLE IF NOT EXISTS kit
+             (id INTEGER PRIMARY KEY AUTOINCREMENT, hash TEXT, amount TEXT, am_usd TEXT,tr_time TEXT
+             , my_time TEXT, transaction_full_hash TEXT, sender TEXT
+             , getters TEXT )''')
+ conn.commit()
+ conn.close()
 def check_user(user_id):
 
     conn = sqlite3.connect(baza)
@@ -101,7 +108,57 @@ def check_table_users():
         print("Table 'users' does not exist.")
         base_create()
     conn.close()
+'''
+(id INTEGER PRIMARY KEY AUTOINCREMENT, hash TEXT, amount TEXT, am_usd TEXT,tr_time TEXT
+             , my_time TEXT, transaction_full_hash TEXT, sender TEXT
+             , getters TEXT )
+'''
+def kit_save(data):
+    hash = data[0]
+    amount_btc = data[2]
+    ti = data[1]
+    tr_time = ti[0:len(ti) - 1]
+    amount_usd = data[3]
+    time = datetime.datetime.now()
+    my_time = time.strftime("%H:%M:%S")
+    trans_fh = data[4]
+    #print(trans_fh)
+    conn = sqlite3.connect(baza)
+    c = conn.cursor()
+    c.execute("INSERT INTO kit (hash,amount,am_usd,tr_time,my_time,transaction_full_hash) VALUES (?,?,?,?,?,?)",(hash,amount_btc,amount_usd,tr_time,my_time,trans_fh))
+    conn.commit()
+    conn.close()
+def kit_checked_wallet(data):
 
+    hash = data[0]
+    trans_full_hash = data[1]
+    sender = data[2]
+    getters = data[3]
+    conn = sqlite3.connect(baza)
+    c = conn.cursor()
+    c.execute("UPDATE kit SET transaction_full_hash = ?, sender = ?, getters = ? WHERE hash = ?", (trans_full_hash,sender,getters, hash))
+    conn.commit()
+    conn.close()
+
+
+def get_users_kit():
+    # Подключение к базе данных
+    conn = sqlite3.connect(baza)
+    cursor = conn.cursor()
+    # Выборка всех пользователей с флагом функции, установленным в True
+    cursor.execute("SELECT user_id FROM users WHERE kit = 1")
+    result = cursor.fetchall()
+    conn.close()
+    return result
+def get_users_price_attention():
+    # Подключение к базе данных
+    conn = sqlite3.connect(baza)
+    cursor = conn.cursor()
+    # Выборка всех пользователей с флагом функции, установленным в True
+    cursor.execute("SELECT user_id FROM users WHERE Orderbook= 1")
+    result = cursor.fetchall()
+    conn.close()
+    return result
 
 
 
